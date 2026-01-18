@@ -1,53 +1,47 @@
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType
 import pymongo
-import pandas as pds
+import os
 
-# Objectif : Source (txt) -> PySpark (Nettoyage) -> HDFS/Mongo (Stockage) -> Streamlit (Visualisation).
-
-# 1. INITIALISATION (Corrigée pour MongoDB)
+# 1. INITIALISATION
 spark = SparkSession.builder \
-    .appName("AnalyseImmobilier") \
+    .appName("AnalyseImmobilierEvolution") \
     .getOrCreate()
-    #.config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.1.1") \
-    #.config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.4.0") \
 
 def processus_etl(chemin_txt):
-    # IMPORT : Ajout du decimal=',' pour les prix français
+    # IMPORT
     df = spark.read.options(header='true', sep='|', encoding='ISO-8859-1', decimal=',').csv(chemin_txt)
     
-    # Traçabilité
-    df = df.withColumn("source_file", F.element_at(F.split(F.input_file_name(), "/"), -1))
-
-    # NETTOYAGE : On garde des noms propres dès le début
-    # On remplace la virgule par un point AVANT de caster en double
-    df_clean = df.withColumn("valeur_fonciere", 
+    # NETTOYAGE ET EXTRACTION DE L'ANNÉE
+    # On normalise la commune et on extrait l'année de la date de mutation
+    df_clean = df.withColumn("Commune", F.upper(F.trim(F.col("Commune")))) \
+                 .withColumn("valeur_fonciere", 
                              F.regexp_replace(F.col("Valeur fonciere"), ",", ".").cast("double")) \
                  .withColumn("surface_bati", 
                              F.regexp_replace(F.col("Surface reelle bati"), ",", ".").cast("double")) \
-                 .withColumn("date_mutation", F.to_date(F.col("Date mutation"), "dd/MM/yyyy"))
+                 .withColumn("date_mutation", F.to_date(F.col("Date mutation"), "dd/MM/yyyy")) \
+                 .withColumn("annee", F.year(F.col("date_mutation")))
     
-    # Filtres
+    # FILTRES 
     df_filtered = df_clean.filter(
         (F.col("Nature mutation") == "Vente") &
         (F.col("Type local").isin("Maison", "Appartement")) &
-        (F.col("surface_bati") > 9) &
-        (F.col("valeur_fonciere") > 1000)
+        (F.col("surface_bati") > 15) &
+        (F.col("valeur_fonciere") > 20000) &
+        (F.col("annee").isNotNull()) # Sécurité pour les dates mal formées
     ).dropna(subset=["valeur_fonciere", "surface_bati"])
 
-    # Calcul et Agrégation
+    # CALCUL ET AGRÉGATION PAR ANNÉE
     df_communes = df_filtered.withColumn("prix_m2", F.col("valeur_fonciere") / F.col("surface_bati")) \
-        .filter((F.col("prix_m2") > 500) & (F.col("prix_m2") < 15000)) \
-        .groupBy("Code departement", "Commune", "source_file").agg(
+        .filter((F.col("prix_m2") > 500) & (F.col("prix_m2") < 20000)) \
+        .groupBy("Code departement", "Commune", "annee").agg(
             F.round(F.median("prix_m2"), 2).alias("prix_median"),
             F.count("valeur_fonciere").alias("nb_ventes")
         ).withColumnRenamed("Code departement", "code_dept")
 
-    # STOCKAGE 
+    # STOCKAGE DANS MONGODB
     try:
-        print("📥 Envoi vers MongoDB via PyMongo...")
-        # Transformation en liste pour MongoDB
+        print(f"Envoi vers MongoDB (Année détectée : {df_communes.select('annee').first()[0] if df_communes.count() > 0 else 'N/A'})")
         data_to_insert = df_communes.toPandas().to_dict('records')
         
         client = pymongo.MongoClient("mongodb://localhost:27017/")
@@ -56,24 +50,26 @@ def processus_etl(chemin_txt):
         
         if data_to_insert:
             collection.insert_many(data_to_insert)
-            print("✅ Succès ! Données visibles dans MongoDB Compass.")
+            print("✅ Succès ! Données insérées.")
     except Exception as e:
         print(f"⚠️ Erreur de stockage : {e}")
-        # Optionnel : sauvegarde en Parquet si Mongo échoue
-        df_communes.write.mode("overwrite").parquet("./backup_parquet")
 
     return df_communes
 
-# Lancement
-import os
+# --- LANCEMENT ---
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dossier = os.path.join(dir_path, "Data")
 
 if os.path.exists(dossier):
+    # Nettoyage de la base au départ pour éviter les doublons de tests
+    try:
+        pymongo.MongoClient("mongodb://localhost:27017/")["immo_db"]["tendances_communes"].delete_many({})
+        print("🧹 Collection MongoDB vidée pour nouvel import.")
+    except: pass
+
     fichiers = [f for f in os.listdir(dossier) if f.endswith('.txt') and not f.startswith('.')]
     for nom_f in fichiers:
-        chemin = os.path.join(dossier, nom_f)
-        resultat = processus_etl(chemin)
-        resultat.show(5)
+        chemin_complet = os.path.join(dossier, nom_f)
+        processus_etl(chemin_complet).show(5)
 else:
     print(f"❌ Dossier {dossier} introuvable.")
