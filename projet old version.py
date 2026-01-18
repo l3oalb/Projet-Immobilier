@@ -1,14 +1,15 @@
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
-import pymongo
-import pandas as pds
 
 # Objectif : Source (txt) -> PySpark (Nettoyage) -> HDFS/Mongo (Stockage) -> Streamlit (Visualisation).
 
 # 1. INITIALISATION (Corrigée pour MongoDB)
 spark = SparkSession.builder \
     .appName("AnalyseImmobilier") \
+    .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1") \
+    .config("spark.mongodb.read.connection.uri", "mongodb://127.0.0.1:27017/immo_db.tendances_communes") \
+    .config("spark.mongodb.write.connection.uri", "mongodb://127.0.0.1:27017/immo_db.tendances_communes") \
     .getOrCreate()
     #.config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.1.1") \
     #.config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:10.4.0") \
@@ -44,36 +45,34 @@ def processus_etl(chemin_txt):
             F.count("valeur_fonciere").alias("nb_ventes")
         ).withColumnRenamed("Code departement", "code_dept")
 
-    # STOCKAGE 
-    try:
-        print("📥 Envoi vers MongoDB via PyMongo...")
-        # Transformation en liste pour MongoDB
-        data_to_insert = df_communes.toPandas().to_dict('records')
-        
-        client = pymongo.MongoClient("mongodb://localhost:27017/")
-        db = client["immo_db"]
-        collection = db["tendances_communes"]
-        
-        if data_to_insert:
-            collection.insert_many(data_to_insert)
-            print("✅ Succès ! Données visibles dans MongoDB Compass.")
-    except Exception as e:
-        print(f"⚠️ Erreur de stockage : {e}")
-        # Optionnel : sauvegarde en Parquet si Mongo échoue
-        df_communes.write.mode("overwrite").parquet("./backup_parquet")
+    # STOCKAGE : Plus simple car configuré dans la SparkSession
+    print(f"📥 Stockage de {chemin_txt} dans MongoDB...")
+    df_communes.write.format("mongodb").mode("append").save()
 
     return df_communes
 
 # Lancement
 import os
+
+# On récupère le chemin absolu du dossier "Data"
 dir_path = os.path.dirname(os.path.realpath(__file__))
-dossier = os.path.join(dir_path, "Data")
+dossier = os.path.join(dir_path, "Data") 
+
+print(f"Le script cherche ici : {dossier}")
 
 if os.path.exists(dossier):
     fichiers = [f for f in os.listdir(dossier) if f.endswith('.txt') and not f.startswith('.')]
+    print(f"📂 Fichiers trouvés : {fichiers}")
+
     for nom_f in fichiers:
-        chemin = os.path.join(dossier, nom_f)
-        resultat = processus_etl(chemin)
-        resultat.show(5)
+        chemin_complet = os.path.join(dossier, nom_f)
+        print(f"🚀 Début du traitement Spark pour : {nom_f}")
+        
+        # On appelle l'ETL
+        resultat = processus_etl(chemin_complet)
+        
+        # On force l'affichage du tableau
+        print(f"Résumé des données pour {nom_f} :")
+        resultat.show(10)
 else:
-    print(f"❌ Dossier {dossier} introuvable.")
+    print(f"ERREUR : Le dossier {dossier} est introuvable !")
