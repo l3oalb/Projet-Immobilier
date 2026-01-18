@@ -1,53 +1,57 @@
-# Pipeline ETL : Analyse des ventes immobilières (DVF)
+# Pipeline ETL : Analyse des tendances et évolutions immobilières (DVF)
 
-Ce projet a pour but de traiter les fichiers "Demandes de valeurs foncières" (Open Data) pour extraire des tendances de prix au m² par commune française.
+Ce projet traite les fichiers "Demandes de valeurs foncières" (Open Data) pour analyser l'évolution du marché immobilier entre 2020 et 2024. Le pipeline permet d'identifier les communes ayant les plus fortes croissances de prix au m².
 
 ## Architecture technique
 
-Le pipeline est découpé en trois couches :
-* **Traitement** : Utilisation de PySpark pour le nettoyage des fichiers volumineux (plusieurs centaines de Mo).
-* **Stockage** : Base de données NoSQL MongoDB.
-* **Restitution** : Dashboard interactif avec Streamlit.
+Le pipeline repose sur une architecture découplée :
+* **Traitement** : PySpark pour le nettoyage massif et l'agrégation temporelle (calcul des médianes par année/commune).
+* **Stockage** : MongoDB pour la persistance des données structurées en séries temporelles.
+* **Restitution** : Dashboard Streamlit interactif pour le calcul d'évolution (2020-2024).
 
 ---
 
 ## Détails de l'implémentation
 
-### 0. Données source
-Les fichiers sources sont hébergés sur data.gouv.fr sous format compressé ZIP. Bien que l'automatisation du téléchargement via l'identifiant de ressource (ex: cc8a50e4...) soit possible, la structure des URLs inclut des timestamps variables nécessitant une étape de parsing HTML pour identifier les derniers liens valides. Pour ce projet, nous avons privilégié une ingestion locale après décompression pour simplifier le travail.
+### 0. Stratégie d'ingestion et limites de l'automatisation
+L'automatisation du téléchargement des données via les URL de `data.gouv.fr` n'a pas été retenue pour ce projet. L'analyse a révélé que les liens directs vers les archives ZIP (hébergées sur `[data.gouv.fr](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres)`) intègrent des jetons temporels variables (timestamps) dans leur structure. 
 
-### 1. Extraction et Nettoyage (Spark)
-Le script `projet.py` automatise la lecture des fichiers présents dans le dossier `/Data`. Ces fichiers ne sont pas joints au dépôt Git car leur taille excède 100 Mo.
+Cette architecture rend l'ingestion par script instable sans l'implémentation d'un module de web scraping complexe pour identifier dynamiquement les derniers liens valides. Nous avons donc opté pour une ingestion locale : les fichiers sont décompressés dans le répertoire `/Data` avant d'être pris en charge par le moteur PySpark.
 
-* **Gestion des types** : Conversion des valeurs foncières et des surfaces (traitement des virgules françaises via expressions régulières).
-* **Filtres métier** : Exclusion des mutations autres que les "Ventes" et suppression des valeurs aberrantes (prix au m² inférieurs à 500€ ou supérieurs à 15 000€).
-* **Agrégation** : Calcul de la médiane des prix et du volume de transactions par commune.
+### 1. Extraction et Agrégation temporelle (Spark)
+Le script `projet.py` traite les fichiers sources présents dans le dossier `/Data`. Ils n'ont pas été joints au git car trop volumineux.
+
+* **Normalisation** : Transformation des noms de communes (majuscules/trim) pour garantir la fusion correcte des données multi-sources.
+* **Analyse temporelle** : Extraction de l'année à partir des dates de mutation pour permettre la comparaison inter-annuelle.
+* **Filtres de fiabilité** : Exclusion des dépendances (surfaces < 15m²) et des prix non représentatifs (< 500€/m² ou > 15 000€/m²) pour assurer la pertinence des médianes.
 
 ### 2. Stratégie de stockage
-Les résultats agrégés sont exportés vers MongoDB. 
-*Note : Pour éviter les problèmes de compatibilité des drivers JDBC/Spark sur macOS, le stockage est effectué via la bibliothèque pymongo après la phase de calcul.*
+Les résultats sont injectés dans MongoDB via la bibliothèque `pymongo`. Chaque document en base représente l'état d'une commune pour une année donnée (ex: Commune, Code Département, Année, Prix Médian, Volume de ventes). Cette structure facilite les requêtes de comparaison et d'historique.
 
-### 3. Visualisation
-L'application `app.py` se connecte à la base MongoDB pour générer des graphiques. L'utilisateur peut filtrer les données par département pour visualiser le top 15 des communes les plus chères.
+### 3. Visualisation et Analyse d'évolution
+L'application `app.py` propose deux niveaux d'analyse :
+* **Palmarès des hausses** : Calcul dynamique du pourcentage d'évolution entre 2020 et 2024 par département. 
+* **Courbes de tendance** : Visualisation de l'historique complet d'une ville sélectionnée pour observer la trajectoire des prix sur 5 ans.
 
 ---
 
-## Installation
+## Installation et Utilisation
 
-1. **Installer les dépendances** :
+1. **Installation des dépendances** :
    `pip install pyspark pymongo pandas streamlit plotly`
 
-2. **Lancer le script de traitement** :
-   `python projet.py`
+2. **Phase de traitement (ETL)** :
+   `python3 projet.py`
+   *(Nettoie la base de données et importe les fichiers du dossier /Data)*
 
-3. **Lancer l'interface** :
+3. **Lancement du Dashboard** :
    `streamlit run app.py`
 
 ---
 
 ## Contenu du dépôt
 
-* `projet.py` : Script principal de traitement Spark.
-* `app.py` : Code de l'interface Streamlit.
+* `projet.py` : Script ETL Spark (Nettoyage, Agrégation, Ingestion).
+* `app.py` : Dashboard Streamlit (Calcul d'évolution et Visualisation).
 * `.gitignore` : Exclusion des fichiers sources volumineux.
-* `Captures` : Fichiers contenant les captures d'écran du terminal, de MongoDB Compass (stockage) et de l'interface Streamlit.
+* `Captures .png` : Fichiers contenant les preuves de succès du pipeline (Terminal, MongoDB Compass et Dashboard streamlit).
