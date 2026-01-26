@@ -42,11 +42,4 @@ Le système surveille les sites d'annonces, extrait précisément les caractéri
 | **Data Engine** | Pandas / SQL | Calcul de l'écart type par rapport aux données DVF. |
 | **Alerting** | SMTP / Resend | Envoi de l'email avec lien direct vers l'annonce. |
 
----
 
-## 🚀 Installation & Utilisation (Développement)
-
-1. **Cloner le projet :**
-   ```bash
-   git clone [https://github.com/ton-username/immo-alert-genai.git](https://github.com/ton-username/immo-alert-genai.git)
-   cd immo-alert-genai
