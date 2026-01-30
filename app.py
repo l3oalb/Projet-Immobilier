@@ -10,9 +10,11 @@ st.title("📈 Évolution du Marché Immobilier (2020-2024)")
 st.markdown("Comparaison des prix médians au m² calculés via **PySpark**.")
 
 # 1. CONNEXION À MONGODB
+MONGO_URI = "mongodb+srv://test123:testpass123@cluster-immo.vyrieko.mongodb.net/"
+
 @st.cache_resource
 def get_data():
-    client = pymongo.MongoClient("mongodb://localhost:27017/")
+    client = pymongo.MongoClient(MONGO_URI)
     db = client["immo_db"]
     collection = db["tendances_communes"]
     data = list(collection.find({}, {'_id': 0})) # On exclut l'ID Mongo pour Pandas
