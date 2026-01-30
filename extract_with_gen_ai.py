@@ -7,7 +7,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def extract_with_ai(raw_text):
-    """Extrait le prix, la surface, le type de bien, la ville et l'état d'un texte d'annonce immobilière avec l'API OpenAI."""
+    """Extrait le prix, la surface, le type de bien, la vilsle et l'état d'un texte d'annonce immobilière avec l'API OpenAI."""
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     
     prompt = f"""

@@ -1,3 +1,4 @@
 Data/*.txt
+java_runtime/*
 .env
 __pycache__/

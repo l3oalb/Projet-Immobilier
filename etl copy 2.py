@@ -1,14 +1,21 @@
+import os
+from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 import pymongo
-import os
-from dotenv import load_dotenv
 
+# Charger les variables d'environnement
 load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI")
 
-# 1. INITIALISATION
+dir_path = os.path.dirname(os.path.realpath(__file__))
+java_path = os.path.join(dir_path, "java_runtime", "Contents", "Home")
+
+os.environ["JAVA_HOME"] = java_path
+os.environ["PATH"] = os.path.join(java_path, "bin") + ":" + os.environ["PATH"]
+
 spark = SparkSession.builder \
-    .appName("AnalyseImmobilierEvolution") \
+    .appName("MonProjetImmo") \
     .getOrCreate()
 
 def processus_etl(chemin_txt):
@@ -42,37 +49,51 @@ def processus_etl(chemin_txt):
             F.count("valeur_fonciere").alias("nb_ventes")
         ).withColumnRenamed("Code departement", "code_dept")
 
-    # STOCKAGE DANS MONGODB
+    # STOCKAGE DANS MONGODB ATLAS
     try:
-        print(f"Envoi vers MongoDB (Année détectée : {df_communes.select('annee').first()[0] if df_communes.count() > 0 else 'N/A'})")
-        data_to_insert = df_communes.toPandas().to_dict('records')
-        
-        client = pymongo.MongoClient("mongodb://localhost:27017/")
-        db = client["immo_db"]
-        collection = db["tendances_communes"]
-        
-        if data_to_insert:
-            collection.insert_many(data_to_insert)
-            print("✅ Succès ! Données insérées.")
+        if df_communes.count() > 0:
+            print(f"Envoi vers MongoDB Atlas...")
+            
+            # Conversion en liste de dictionnaires
+            data_to_insert = df_communes.toPandas().to_dict('records')
+            
+            # CONNEXION ATLAS
+            client = pymongo.MongoClient(MONGO_URI)
+            db = client["immo_db"]
+            collection = db["tendances_communes"]
+            
+            if data_to_insert:
+                # --- MODIFICATION ICI : ENVOI PAR PAQUETS ---
+                taille_paquet = 500
+                total_lignes = len(data_to_insert)
+                
+                for i in range(0, total_lignes, taille_paquet):
+                    paquet = data_to_insert[i : i + taille_paquet]
+                    collection.insert_many(paquet)
+                    print(f"   > Paquet envoyé ({min(i + taille_paquet, total_lignes)}/{total_lignes})")
+                
+                print(f"✅ Succès final ! {total_lignes} lignes insérées.")
+        else:
+            print("⚠️ Aucune donnée à insérer pour ce fichier.")
+            
     except Exception as e:
-        print(f"⚠️ Erreur de stockage : {e}")
+        print(f"⚠️ Erreur de stockage Atlas : {e}")
 
     return df_communes
 
 # --- LANCEMENT ---
-dir_path = os.path.dirname(os.path.realpath(__file__))
-dossier = os.path.join(dir_path, "Data")
+dossier = os.path.join(dir_path, "../données immobilier")
 
 if os.path.exists(dossier):
-    # Nettoyage de la base au départ pour éviter les doublons de tests
+    # Nettoyage de la base Atlas au départ
     try:
-        pymongo.MongoClient("mongodb://localhost:27017/")["immo_db"]["tendances_communes"].delete_many({})
-        print("🧹 Collection MongoDB vidée pour nouvel import.")
-    except: pass
+        client = pymongo.MongoClient(MONGO_URI)
+        client["immo_db"]["tendances_communes"].delete_many({})
+        print("🧹 Collection Atlas vidée pour nouvel import.")
+    except Exception as e:
+        print(f"Impossible de vider la collection : {e}")
 
     fichiers = [f for f in os.listdir(dossier) if f.endswith('.txt') and not f.startswith('.')]
     for nom_f in fichiers:
         chemin_complet = os.path.join(dossier, nom_f)
         processus_etl(chemin_complet).show(5)
-else:
-    print(f"❌ Dossier {dossier} introuvable.")
