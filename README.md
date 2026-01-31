@@ -42,4 +42,20 @@ Le système surveille les sites d'annonces, extrait précisément les caractéri
 | **Data Engine** | Pandas / SQL | Calcul de l'écart type par rapport aux données DVF. |
 | **Alerting** | SMTP / Resend | Envoi de l'email avec lien direct vers l'annonce. |
 
+---
+
+## 🌍 Enrichissement Géographique
+
+### **Géocodage** (`get_coord_API.py`)
+Conversion d'adresses en coordonnées GPS via l'API de la Géoplateforme (IGN). Permet de localiser précisément chaque bien pour l'analyse spatiale.
+
+### **Analyse Environnementale** (`transport.py`)
+Enrichissement des biens avec des indicateurs de qualité de vie via OpenStreetMap :
+- Distance aux transports (bus, métro) et gares
+- Proximité des commerces et écoles
+- Présence de parcs et espaces verts
+- Exposition aux routes majeures (nuisances)
+
+Ces données permettent d'affiner l'analyse de valeur en intégrant la qualité de l'emplacement.
+
 
