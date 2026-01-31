@@ -1,11 +1,13 @@
 import pymongo
 
+MONGO_URI = "mongodb+srv://test123:testpass123@cluster-immo.vyrieko.mongodb.net/"
+
 def verifier_opportunite(annonce_scrapee):
     """
     Compare une annonce scrapée avec les tendances MongoDB.
     annonce_scrapee: dict contenant {'prix_m2', 'lieu', 'type'}
     """
-    client = pymongo.MongoClient("mongodb://localhost:27017/")
+    client = pymongo.MongoClient(MONGO_URI)
     db = client["immo_db"]
     collection = db["tendances_communes"]
 

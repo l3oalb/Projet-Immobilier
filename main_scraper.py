@@ -5,13 +5,13 @@ from get_coord_API import get_coordinates
 from transport import get_environment_info
 
 # --- BOUCLE PRINCIPALE ---
-data = get_latest_ads_content("Nantes", "50")
+ads_data = get_latest_ads_content("Nantes", "50")
 
-for ad in data:
+for ad in ads_data:
     # 1. L'IA extrait les données proprement
     # On passe le raw_text (Jina) à l'IA
-    info_ia = extract_with_ai(ad["raw_text"])
-
+    info_ia = extract_with_ai(ad['content'])
+    
     if info_ia:
         # 2. On calcule le prix au m2 avec les chiffres de l'IA
         p = info_ia.get("prix")

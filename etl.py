@@ -47,13 +47,13 @@ def processus_etl(chemin_txt):
         print(f"Envoi vers MongoDB (Année détectée : {df_communes.select('annee').first()[0] if df_communes.count() > 0 else 'N/A'})")
         data_to_insert = df_communes.toPandas().to_dict('records')
         
-        client = pymongo.MongoClient("mongodb://localhost:27017/")
+        client = pymongo.MongoClient(MONGO_URI)
         db = client["immo_db"]
         collection = db["tendances_communes"]
         
         if data_to_insert:
             collection.insert_many(data_to_insert)
-            print("✅ Succès ! Données insérées.")
+            print(f"Données insérées.")
     except Exception as e:
         print(f"⚠️ Erreur de stockage : {e}")
 
@@ -62,12 +62,13 @@ def processus_etl(chemin_txt):
 # --- LANCEMENT ---
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dossier = os.path.join(dir_path, "Data")
+MONGO_URI = os.getenv("MONGO_URI")
 
 if os.path.exists(dossier):
     # Nettoyage de la base au départ pour éviter les doublons de tests
     try:
-        pymongo.MongoClient("mongodb://localhost:27017/")["immo_db"]["tendances_communes"].delete_many({})
-        print("🧹 Collection MongoDB vidée pour nouvel import.")
+        pymongo.MongoClient(MONGO_URI)["immo_db"]["tendances_communes"].delete_many({})
+        print("Collection MongoDB vidée pour nouvel import.")
     except: pass
 
     fichiers = [f for f in os.listdir(dossier) if f.endswith('.txt') and not f.startswith('.')]
