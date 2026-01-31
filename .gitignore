@@ -1,4 +1,31 @@
+# Données sensibles
 Data/*.txt
-java_runtime/*
 .env
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Spark
+java_runtime/*
+spark-warehouse/
+derby.log
+metastore_db/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml

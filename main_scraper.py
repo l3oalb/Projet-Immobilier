@@ -1,8 +1,8 @@
-from jina_web_scraper import get_latest_ads_content
-from extract_with_gen_ai import extract_with_ai
-from decision import verifier_opportunite
-from get_coord_API import get_coordinates
-from get_additionals_informations import get_environment_info
+from projet_immobilier.jina_web_scraper import get_latest_ads_content
+from projet_immobilier.extract_with_gen_ai import extract_with_ai
+from projet_immobilier.decision import verifier_opportunite
+from projet_immobilier.get_coord_API import get_coordinates
+from projet_immobilier.get_additionals_informations import get_environment_info
 
 # --- BOUCLE PRINCIPALE ---
 ads_data = get_latest_ads_content("Nantes", "50")
