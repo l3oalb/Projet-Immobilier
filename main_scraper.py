@@ -2,7 +2,7 @@ from jina_web_scraper import get_latest_ads_content
 from extract_with_gen_ai import extract_with_ai
 from decision import verifier_opportunite
 from get_coord_API import get_coordinates
-from transport import get_environment_info
+from get_additionals_informations import get_environment_info
 
 # --- BOUCLE PRINCIPALE ---
 ads_data = get_latest_ads_content("Nantes", "50")
@@ -10,8 +10,8 @@ ads_data = get_latest_ads_content("Nantes", "50")
 for ad in ads_data:
     # 1. L'IA extrait les données proprement
     # On passe le raw_text (Jina) à l'IA
-    info_ia = extract_with_ai(ad['content'])
-    
+    info_ia = extract_with_ai(ad["content"])
+
     if info_ia:
         # 2. On calcule le prix au m2 avec les chiffres de l'IA
         p = info_ia.get("prix")
